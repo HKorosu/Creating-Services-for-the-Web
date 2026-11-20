@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Employee management</title>
+    <style>
+        :root { font-family: system-ui, sans-serif; color: #172033; background: #f3f6fb; }
+        body { max-width: 900px; margin: 40px auto; padding: 0 20px; }
+        h1 { margin-bottom: 8px; }
+        .panel { background: white; border: 1px solid #dce3ed; border-radius: 12px; padding: 22px; margin: 20px 0; }
+        form { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 12px; align-items: end; }
+        label { display: grid; gap: 6px; font-size: .9rem; }
+        input, button { font: inherit; padding: 10px 12px; border: 1px solid #c8d1df; border-radius: 7px; }
+        button { cursor: pointer; background: #155eef; color: white; border: 0; }
+        button.secondary { background: #e8edf5; color: #172033; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid #e6eaf0; }
+        #message { min-height: 1.4em; color: #b42318; }
+        @media (max-width: 650px) { form { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<h1>Employee management</h1>
+<p>Use this page to test the employee web service.</p>
+
+<section class="panel">
+    <h2 id="form-title">Add employee</h2>
+    <form id="employee-form">
+        <input id="employee-id" type="hidden">
+        <label>Name
+            <input id="name" name="name" maxlength="150" required>
+        </label>
+        <label>Salary
+            <input id="salary" name="salary" type="number" min="0" step="0.01" required>
+        </label>
+        <button type="submit">Save</button>
+        <button id="cancel-edit" class="secondary" type="button" hidden>Cancel</button>
+    </form>
+    <p id="message" role="status" aria-live="polite"></p>
+</section>
+
+<section class="panel">
+    <h2>Employees</h2>
+    <table>
+        <thead><tr><th>ID</th><th>Name</th><th>Salary</th><th>Action</th></tr></thead>
+        <tbody id="employee-list"></tbody>
+    </table>
+</section>
+
+<script>
+    const apiUrl = "/api/employees";
+    const form = document.getElementById("employee-form");
+    const message = document.getElementById("message");
+
+    async function request(url, options = {}) {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const details = await response.json().catch(() => null);
+            throw new Error(details?.detail || details?.message || `Request failed (${response.status})`);
+        }
+        return response.status === 204 ? null : response.json();
+    }
+
+    async function loadEmployees() {
+        const employees = await request(apiUrl);
+        const list = document.getElementById("employee-list");
+        list.replaceChildren();
+        employees.forEach(employee => {
+            const row = document.createElement("tr");
+            for (const value of [employee.id, employee.name, Number(employee.salary).toFixed(2)]) {
+                const cell = document.createElement("td");
+                cell.textContent = value;
+                row.appendChild(cell);
+            }
+            const actionCell = document.createElement("td");
+            const editButton = document.createElement("button");
+            editButton.type = "button";
+            editButton.className = "secondary";
+            editButton.textContent = "Edit";
+            editButton.addEventListener("click", () => {
+                document.getElementById("employee-id").value = employee.id;
+                document.getElementById("name").value = employee.name;
+                document.getElementById("salary").value = employee.salary;
+                document.getElementById("form-title").textContent = `Update employee #${employee.id}`;
+                document.getElementById("cancel-edit").hidden = false;
+            });
+            actionCell.appendChild(editButton);
+            row.appendChild(actionCell);
+            list.appendChild(row);
+        });
+    }
+
+    function resetForm() {
+        form.reset();
+        document.getElementById("employee-id").value = "";
+        document.getElementById("form-title").textContent = "Add employee";
+        document.getElementById("cancel-edit").hidden = true;
+    }
+
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+        const id = document.getElementById("employee-id").value;
+        const employee = {
+            name: document.getElementById("name").value,
+            salary: Number(document.getElementById("salary").value)
+        };
+        try {
+            await request(id ? `${apiUrl}/${id}` : apiUrl, {
+                method: id ? "PUT" : "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(employee)
+            });
+            message.textContent = id ? "Employee updated." : "Employee added.";
+            resetForm();
+            await loadEmployees();
+        } catch (error) {
+            message.textContent = error.message;
+        }
+    });
+
+    document.getElementById("cancel-edit").addEventListener("click", resetForm);
+    loadEmployees().catch(error => { message.textContent = error.message; });
+</script>
+</body>
+</html>
